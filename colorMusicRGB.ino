@@ -41,13 +41,14 @@ float avgLevelMax = 1;
 #define SMOOTH_SCALE_LEVEL 0.15
 float avgScaleLevel = 1;
 
-#define LOW_BRIGHTNESS 10
+#define LOW_BRIGHTNESS 10 // LOW_BRIGTHNESS применять к avgLevel
+#define LOW_LEVEL 100     // нижний порог входного сигнала
 
 int globMax;
 int thisMax;
 unsigned long globMaxTimer;
 
-#define LOG_OUTPUT 0  // включить вывод лога в Serial port
+#define LOG_OUTPUT 1  // включить вывод лога в Serial port
 
 
 // the setup routine runs once when you press reset:
@@ -97,11 +98,12 @@ void loop() {
     // сгладим этот полученный уровень
     avgScaleLevel +=  (scaleLevel - avgScaleLevel) * SMOOTH_SCALE_LEVEL;
 
-    // если текущий уровень якрости выше нижнего порога
-    if (avgScaleLevel > LOW_BRIGHTNESS) strip.setBrightness(avgScaleLevel);
-    // если ниже, установить яркость нижнего порога
-    else strip.setBrightness(LOW_BRIGHTNESS);
-
+    // если текущий уровень аудио ниже порога, то установить LOW_BRIGHTNESS
+    if (avgLevel < LOW_LEVEL) {
+      avgScaleLevel = LOW_BRIGHTNESS;
+    }
+    
+    strip.setBrightness(avgScaleLevel);
 
     if (LOG_OUTPUT) {
       Serial.print(globMax); Serial.print(" ");
