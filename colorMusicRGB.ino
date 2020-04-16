@@ -71,13 +71,21 @@ int valueColorWheelMode = 0;
 unsigned long timeColorWheelMode = 0;
 long speedColorWheelMode = 0;
 unsigned int minSpeedColorWheelMode = 100;
-unsigned int brightnessRGB = 128;
+unsigned int thisBrightness = 128;
+//###################################################################
+//############## РЕЖИМ FIRE #########################################
+unsigned long prevTimeFire = 0;
+unsigned long updateTimeFire = 100;
+float SMOOTH_FIRE = 0.01;
+int MIN_BRIGHTNESS_FIRE = 55;
+int MAX_BRIGHTNESS_FIRE = 75;
+float val = 10;
 //###################################################################
 
 #define LOG_OUTPUT 0  // включить вывод лога в Serial port
 //######### Переменные #######
 int modeNum = 1;        // номер режима
-int modeNumCounts = 2;  // кол-во режимов
+int modeNumCounts = 3;  // кол-во режимов
 
 // the setup routine runs once when you press reset:
 void setup() {
@@ -125,15 +133,15 @@ void control() {
   if (enc1.isTurn()) {
     switch (modeNum) {
       case 1: // аудио режим, пока настроек здесь нет
-        if (enc1.isRightH()) brightnessRGB += 5;    // если было удержание + поворот направо, увеличиваем на 5
-        if (enc1.isLeftH()) brightnessRGB -= 5;     // если было удержание + поворот налево, уменьшаем на 5
+        if (enc1.isRightH()) thisBrightness += 5;    // если было удержание + поворот направо, увеличиваем на 5
+        if (enc1.isLeftH()) thisBrightness -= 5;     // если было удержание + поворот налево, уменьшаем на 5
 
-        if (brightnessRGB > 255) {
-          brightnessRGB = 255;
+        if (thisBrightness > 255) {
+          thisBrightness = 255;
         }
 
-        if (brightnessRGB < 0) {
-          brightnessRGB = 0;
+        if (thisBrightness < 0) {
+          thisBrightness = 0;
         }
         break;
 
@@ -153,17 +161,17 @@ void control() {
           speedColorWheelMode = minSpeedColorWheelMode;
         }
 
-        if (enc1.isRightH()) brightnessRGB += 5;    // если было удержание + поворот направо, увеличиваем на 5
-        if (enc1.isLeftH()) brightnessRGB -= 5;     // если было удержание + поворот налево, уменьшаем на 5
+        if (enc1.isRightH()) thisBrightness += 5;    // если было удержание + поворот направо, увеличиваем на 5
+        if (enc1.isLeftH()) thisBrightness -= 5;     // если было удержание + поворот налево, уменьшаем на 5
 
-        if (brightnessRGB > 255) {
-          brightnessRGB = 255;
+        if (thisBrightness > 255) {
+          thisBrightness = 255;
         }
 
-        if (brightnessRGB < 0) {
-          brightnessRGB = 0;
+        if (thisBrightness < 0) {
+          thisBrightness = 0;
         }
-        Serial.print("brightnessColorWheelMode: "); Serial.println(brightnessRGB);
+        Serial.print("brightnessColorWheelMode: "); Serial.println(thisBrightness);
         Serial.print("speedColorWheelMode: "); Serial.println(speedColorWheelMode);
         break;
     }
@@ -182,7 +190,23 @@ void effects() {
     case 2:
       colorWheelMode();
       break;
+
+    case 3:
+      fireTick();
+      break;
   }
+}
+
+void fireTick() {
+  int rndVal;
+  if (millis() - prevTimeFire > updateTimeFire) {
+    rndVal = random(5, 10) * 10;
+    prevTimeFire = millis();
+  }
+  val = val * (1 - SMOOTH_FIRE) + rndVal * SMOOTH_FIRE;
+  strip.colorWheel(val);
+  thisBrightness = map(val, 20, 120, MIN_BRIGHTNESS_FIRE, MIN_BRIGHTNESS_FIRE);
+  strip.setBrightness(thisBrightness);
 }
 
 void colorWheelMode() {
@@ -192,7 +216,7 @@ void colorWheelMode() {
     if (valueColorWheelMode > 1530) {
       valueColorWheelMode = 0;
     }
-    strip.setBrightness(brightnessRGB);
+    strip.setBrightness(thisBrightness);
     strip.colorWheel(valueColorWheelMode);
     timeColorWheelMode = micros();
   }
@@ -222,7 +246,7 @@ void audioMode() {
     // изменяем яркость
     // масштабируем мгновенный максимум от общей средней громкости и общего среднего максимума к
     // диапазону ШИМ 0-brightnessRGB
-    int scaleLevel = constrain(map(thisMax, avgLevel, avgLevelMax, 0, brightnessRGB), 0, brightnessRGB);
+    int scaleLevel = constrain(map(thisMax, avgLevel, avgLevelMax, 0, thisBrightness), 0, thisBrightness);
 
     // сгладим этот полученный уровень
     avgScaleLevel +=  (scaleLevel - avgScaleLevel) * SMOOTH_SCALE_LEVEL;
