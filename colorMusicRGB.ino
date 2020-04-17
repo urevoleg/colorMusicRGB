@@ -69,9 +69,11 @@ unsigned long globMaxTimer;
 //############### ПАРАМЕТРЫ РЕЖИМА colorWheel #######################
 int valueColorWheelMode = 0;
 unsigned long timeColorWheelMode = 0;
-long speedColorWheelMode = 0;
-unsigned int minSpeedColorWheelMode = 100;
-unsigned int thisBrightness = 128;
+float periodColorWheel = 10.0;                                                // период всего цветового круга * 10^6 мкс - 1 сек по дефолту
+unsigned long speedColorWheelMode = long(1000000 * periodColorWheel / 1530);  // длительность смены цвета для достижения нужного периода
+unsigned int minSpeedColorWheelMode = 650;                                    // примерно 1сек период
+unsigned int maxSpeedColorWheelMode = 20000;                                  // около 30 сек
+unsigned int thisBrightness = 128;                                            // яркость по-умолчанию
 //###################################################################
 //############## РЕЖИМ FIRE #########################################
 unsigned long prevTimeFire = 0;
@@ -79,7 +81,9 @@ unsigned long updateTimeFire = 100;
 float SMOOTH_FIRE = 0.01;
 int MIN_BRIGHTNESS_FIRE = 55;
 int MAX_BRIGHTNESS_FIRE = 75;
+int AVG_BRIGHTNESS_FIRE = 125;
 float val = 10;
+int thisVal = 0;
 //###################################################################
 
 #define LOG_OUTPUT 0  // включить вывод лога в Serial port
@@ -94,7 +98,7 @@ void setup() {
 
 #ifdef USE_ENCODER
   enc1.setType(TYPE1);
-  enc1.setFastTimeout(40);
+  enc1.setFastTimeout(25);
 #endif
   strip.setDirection(REVERSE);
   strip.setBrightness(0);
@@ -121,7 +125,7 @@ void control() {
 #ifdef USE_ENCODER
   enc1.tick();
 
-  if (enc1.isClick()) {
+  if (enc1.isDouble()) {
     modeNum++;
     if (modeNum > modeNumCounts) {
       modeNum = 1;
@@ -133,8 +137,8 @@ void control() {
   if (enc1.isTurn()) {
     switch (modeNum) {
       case 1: // аудио режим, пока настроек здесь нет
-        if (enc1.isRightH()) thisBrightness += 5;    // если было удержание + поворот направо, увеличиваем на 5
-        if (enc1.isLeftH()) thisBrightness -= 5;     // если было удержание + поворот налево, уменьшаем на 5
+        if (enc1.isRight()) thisBrightness += 5;    // если было удержание + поворот направо, увеличиваем на 5
+        if (enc1.isLeft()) thisBrightness -= 5;     // если было удержание + поворот налево, уменьшаем на 5
 
         if (thisBrightness > 255) {
           thisBrightness = 255;
@@ -143,18 +147,21 @@ void control() {
         if (thisBrightness < 0) {
           thisBrightness = 0;
         }
+        Serial.print("brightness: "); Serial.println(thisBrightness);
         break;
 
       case 2: // режим цветового круга, настройка скорости
 
-        if (enc1.isRight()) speedColorWheelMode++;        // если был поворот направо, увеличиваем на 1
-        if (enc1.isLeft()) speedColorWheelMode--;         // если был поворот налево, уменьшаем на 1
+        if (enc1.isRight()) periodColorWheel += 0.1;      // если был поворот направо, увеличиваем на 1
+        if (enc1.isLeft()) periodColorWheel -= 0.1;       // если был поворот налево, уменьшаем на 1
 
-        if (enc1.isFastR()) speedColorWheelMode += 10;    // если был быстрый поворот направо, увеличиваем на 10
-        if (enc1.isFastL()) speedColorWheelMode -= 10;    // если был быстрый поворот налево, уменьшаем на 10
+        if (enc1.isFastR()) periodColorWheel += 0.1;    // если был быстрый поворот направо, увеличиваем на 10
+        if (enc1.isFastL()) periodColorWheel -= 0.1;    // если был быстрый поворот налево, уменьшаем на 10
 
-        if (speedColorWheelMode > 5000) {
-          speedColorWheelMode = 5000;
+        speedColorWheelMode = long(1000000 * periodColorWheel / 1530);
+
+        if (speedColorWheelMode > maxSpeedColorWheelMode) {
+          speedColorWheelMode = maxSpeedColorWheelMode;
         }
 
         if (speedColorWheelMode < minSpeedColorWheelMode) {
@@ -171,8 +178,21 @@ void control() {
         if (thisBrightness < 0) {
           thisBrightness = 0;
         }
-        Serial.print("brightnessColorWheelMode: "); Serial.println(thisBrightness);
-        Serial.print("speedColorWheelMode: "); Serial.println(speedColorWheelMode);
+        Serial.print("brightness: "); Serial.println(thisBrightness);
+        Serial.print("periodColorWheel: "); Serial.println(periodColorWheel);
+        break;
+
+      case 3: // режим огня
+        if (enc1.isRight()) MAX_BRIGHTNESS_FIRE += 5;    // если было удержание + поворот направо, увеличиваем на 5
+        if (enc1.isLeft()) MAX_BRIGHTNESS_FIRE -= 5;     // если было удержание + поворот налево, уменьшаем на 5
+        if (MAX_BRIGHTNESS_FIRE < MIN_BRIGHTNESS_FIRE + 5){
+          MAX_BRIGHTNESS_FIRE = MIN_BRIGHTNESS_FIRE + 5;
+        }
+        if (MAX_BRIGHTNESS_FIRE > 255){
+          MAX_BRIGHTNESS_FIRE = 255;
+        }
+        Serial.print("MAX_BRIGHTNESS_FIRE: "); Serial.println(MAX_BRIGHTNESS_FIRE);
+       
         break;
     }
   }
@@ -200,18 +220,18 @@ void effects() {
 void fireTick() {
   int rndVal;
   if (millis() - prevTimeFire > updateTimeFire) {
-    rndVal = random(5, 10) * 10;
+    rndVal = random(3, 7) * 10;
     prevTimeFire = millis();
   }
   val = val * (1 - SMOOTH_FIRE) + rndVal * SMOOTH_FIRE;
   strip.colorWheel(val);
-  thisBrightness = map(val, 20, 120, MIN_BRIGHTNESS_FIRE, MIN_BRIGHTNESS_FIRE);
+  thisBrightness = map(val, 30, 70, MIN_BRIGHTNESS_FIRE, MAX_BRIGHTNESS_FIRE);
   strip.setBrightness(thisBrightness);
 }
 
 void colorWheelMode() {
   // режим цветового круга
-  if (micros() - timeColorWheelMode > speedColorWheelMode) {
+  if (micros() - timeColorWheelMode > long(1000000 * periodColorWheel / 1530)) {
     valueColorWheelMode++;
     if (valueColorWheelMode > 1530) {
       valueColorWheelMode = 0;
