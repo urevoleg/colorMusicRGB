@@ -21,6 +21,8 @@ int color_wheel_value = 0;
 #define MAX_VALUE_UPDATE_TIME 10
 unsigned long last_update_max_value = 0;
 
+#define AUDIO_PIN A1
+
 #define SAMPLES 250
 
 #define USE_ENCODER 0 // управление при помощи энкодера
@@ -38,6 +40,15 @@ Encoder enc1(CLK, DT, BTN_PIN);
 #define BTN_PIN 10
 #endif
 
+//----- OLED ------
+#include <Wire.h>
+#include "SSD1306Ascii.h"
+#include "SSD1306AsciiWire.h"
+
+// 0X3C+SA0 - 0x3C or 0x3D
+#define I2C_ADDRESS 0x3C
+
+SSD1306AsciiWire oled;
 
 
 //############### ПАРАМЕТРЫ РЕЖИМА audioRGB #######################
@@ -60,7 +71,7 @@ float avgLevelMax = 1;
 float avgScaleLevel = 1;
 
 #define LOW_BRIGHTNESS 10 // LOW_BRIGTHNESS применять к avgLevel
-#define LOW_LEVEL 100     // нижний порог входного сигнала
+#define LOW_LEVEL 65     // нижний порог входного сигнала
 
 int globMax;
 int thisMax;
@@ -73,7 +84,7 @@ float periodColorWheel = 10.0;                                                //
 unsigned long speedColorWheelMode = long(1000000 * periodColorWheel / 1530);  // длительность смены цвета для достижения нужного периода
 unsigned int minSpeedColorWheelMode = 650;                                    // примерно 1сек период
 unsigned int maxSpeedColorWheelMode = 20000;                                  // около 30 сек
-unsigned int thisBrightness = 128;                                            // яркость по-умолчанию
+int thisBrightness = 255;                                            // яркость по-умолчанию
 //###################################################################
 //############## РЕЖИМ FIRE #########################################
 unsigned long prevTimeFire = 0;
@@ -101,15 +112,26 @@ void setup() {
   enc1.setFastTimeout(25);
 #endif
   strip.setDirection(REVERSE);
-  strip.setBrightness(0);
+  strip.setBrightness(thisBrightness);
 
   // 1 уставка внутреннего опорного
   analogReference(INTERNAL);  // внутреннее опорное напряжение 1.1B
+
+  // ----- OLED --------
+  Wire.begin();
+  Wire.setClock(400000L);
+
+  oled.begin(&Adafruit128x64, I2C_ADDRESS);
+  oled.displayRemap(true);
+  oled.setFont(lcd5x7);
+
+  drawInfo();
 
   // Изменяем частоту АЦП --> 250кГц
   bitSet(ADCSRA, ADPS2);
   bitClear(ADCSRA, ADPS1);
   bitSet(ADCSRA, ADPS0);
+
 }
 
 
@@ -130,11 +152,15 @@ void control() {
     if (modeNum > modeNumCounts) {
       modeNum = 1;
     }
+    drawInfo();
     Serial.print("modeNum: "); Serial.println(modeNum);
   }
 
   // если поворачивается энкодер
   if (enc1.isTurn()) {
+
+    drawInfo();
+    
     switch (modeNum) {
       case 1: // аудио режим, пока настроек здесь нет
         if (enc1.isRight()) thisBrightness += 5;    // если было удержание + поворот направо, увеличиваем на 5
@@ -185,20 +211,33 @@ void control() {
       case 3: // режим огня
         if (enc1.isRight()) MAX_BRIGHTNESS_FIRE += 5;    // если было удержание + поворот направо, увеличиваем на 5
         if (enc1.isLeft()) MAX_BRIGHTNESS_FIRE -= 5;     // если было удержание + поворот налево, уменьшаем на 5
-        if (MAX_BRIGHTNESS_FIRE < MIN_BRIGHTNESS_FIRE + 5){
+        if (MAX_BRIGHTNESS_FIRE < MIN_BRIGHTNESS_FIRE + 5) {
           MAX_BRIGHTNESS_FIRE = MIN_BRIGHTNESS_FIRE + 5;
         }
-        if (MAX_BRIGHTNESS_FIRE > 255){
+        if (MAX_BRIGHTNESS_FIRE > 255) {
           MAX_BRIGHTNESS_FIRE = 255;
         }
         Serial.print("MAX_BRIGHTNESS_FIRE: "); Serial.println(MAX_BRIGHTNESS_FIRE);
-       
+
         break;
     }
   }
 
 
 #endif
+}
+
+void drawInfo(){
+  oled.clear();
+  oled.setCursor(0, 0);
+  oled.print("<M>");
+  oled.setCursor(20, 0);
+  oled.print(modeNum);
+  
+  oled.setCursor(0, 2);
+  oled.print("<B>");
+  oled.setCursor(20, 2);
+  oled.print(thisBrightness);
 }
 
 void effects() {
@@ -247,7 +286,7 @@ void audioMode() {
   if (millis() - last_update_max_value > MAX_VALUE_UPDATE_TIME) {
     thisMax = 0;
     for (int i = 0; i < SAMPLES; i++) {
-      int adc_value = analogRead(A0);
+      int adc_value = analogRead(AUDIO_PIN);
       // поиск максимума
       if (adc_value > thisMax) {
         thisMax = adc_value;
@@ -255,7 +294,9 @@ void audioMode() {
     }
 
     // глобальный максимум максимумов
-    if (thisMax > globMax) globMax = thisMax;
+    if (thisMax > globMax) {
+      globMax = thisMax;
+    }
 
     // фильтр для сглаживания максимума
     avgLevelMax +=  (globMax - avgLevelMax) * SMOOTH_GLOB_MAX;
