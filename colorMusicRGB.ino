@@ -71,10 +71,10 @@ float avgLevelMax = 1;
 float avgScaleLevel = 1;
 
 #define LOW_BRIGHTNESS 10 // LOW_BRIGTHNESS применять к avgLevel
-#define LOW_LEVEL 65     // нижний порог входного сигнала
+#define LOW_LEVEL 80     // нижний порог входного сигнала
 
-int globMax;
-int thisMax;
+int globMax = 1;
+int thisMax = 1;
 unsigned long globMaxTimer;
 //###################################################################
 //############### ПАРАМЕТРЫ РЕЖИМА colorWheel #######################
@@ -101,6 +101,11 @@ int thisVal = 0;
 //######### Переменные #######
 int modeNum = 1;        // номер режима
 int modeNumCounts = 3;  // кол-во режимов
+
+float tmp_smooth = 1500;
+
+unsigned long lastRiseLevel = 0;
+float period_smooth = 0;
 
 // the setup routine runs once when you press reset:
 void setup() {
@@ -132,6 +137,8 @@ void setup() {
   bitClear(ADCSRA, ADPS1);
   bitSet(ADCSRA, ADPS0);
 
+  // подождем для устаканивания переходных процессов
+  delay(2000);
 }
 
 
@@ -160,7 +167,7 @@ void control() {
   if (enc1.isTurn()) {
 
     drawInfo();
-    
+
     switch (modeNum) {
       case 1: // аудио режим, пока настроек здесь нет
         if (enc1.isRight()) thisBrightness += 5;    // если было удержание + поворот направо, увеличиваем на 5
@@ -227,13 +234,13 @@ void control() {
 #endif
 }
 
-void drawInfo(){
+void drawInfo() {
   oled.clear();
   oled.setCursor(0, 0);
   oled.print("<M>");
   oled.setCursor(20, 0);
   oled.print(modeNum);
-  
+
   oled.setCursor(0, 2);
   oled.print("<B>");
   oled.setCursor(20, 2);
@@ -318,8 +325,32 @@ void audioMode() {
     }
 
     strip.setBrightness(avgScaleLevel);
+    int m;
+    if (avgLevelMax > globMax) {
+      m = avgLevelMax;
+    } else {
+      m = globMax;
+    }
 
-    if (LOG_OUTPUT) {
+    tmp_smooth +=  (avgScaleLevel - tmp_smooth) * 0.005;
+
+    if (avgScaleLevel > tmp_smooth ) {
+      lastRiseLevel = millis();
+    }
+    
+    unsigned long period = (millis() -  lastRiseLevel) * 10;
+    if (period < 1000) {
+      period = 1000;
+    }
+    if (period > 7500) {
+      period = 7500;
+    }
+
+    period_smooth +=  (period - period_smooth) * 0.025;
+    Serial.print(period); Serial.print(" ");
+    Serial.println(period_smooth);
+
+    if (0) {
       Serial.print(globMax); Serial.print(" ");
       Serial.print(avgLevelMax); Serial.print(" ");
       Serial.print(avgLevel); Serial.print(" ");
@@ -330,7 +361,7 @@ void audioMode() {
   }
 
   // радуга поверх всей ленты
-  if (micros() - last_update_color_wheel > COLOR_WHEEL_UPDATE_TIME) {
+  if (micros() - last_update_color_wheel > int(1000.0 * period_smooth / 1530)) {
     color_wheel_value++;
     if (color_wheel_value > 1530) color_wheel_value = 0;
     strip.colorWheel(color_wheel_value);
