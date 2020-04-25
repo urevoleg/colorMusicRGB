@@ -322,15 +322,10 @@ void audioMode() {
     // если текущий уровень аудио ниже порога, то установить LOW_BRIGHTNESS
     if (avgLevel < LOW_LEVEL) {
       avgScaleLevel = LOW_BRIGHTNESS;
+      period_smooth = COLOR_WHEEL_PERIOD;
     }
 
     strip.setBrightness(avgScaleLevel);
-    int m;
-    if (avgLevelMax > globMax) {
-      m = avgLevelMax;
-    } else {
-      m = globMax;
-    }
 
     tmp_smooth +=  (avgScaleLevel - tmp_smooth) * 0.005;
 
