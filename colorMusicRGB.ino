@@ -313,8 +313,8 @@ void audioMode() {
 
     // изменяем яркость
     // масштабируем мгновенный максимум от общей средней громкости и общего среднего максимума к
-    // диапазону ШИМ 0-brightnessRGB
-    int scaleLevel = constrain(map(thisMax, avgLevel, avgLevelMax, 0, thisBrightness), 0, thisBrightness);
+    // диапазону ШИМ LOW_BRIGHTNESS-thisBrightness
+    int scaleLevel = constrain(map(thisMax, avgLevel, avgLevelMax, LOW_BRIGHTNESS, thisBrightness), LOW_BRIGHTNESS, thisBrightness);
 
     // сгладим этот полученный уровень
     avgScaleLevel +=  (scaleLevel - avgScaleLevel) * SMOOTH_SCALE_LEVEL;
@@ -322,17 +322,22 @@ void audioMode() {
     // если текущий уровень аудио ниже порога, то установить LOW_BRIGHTNESS
     if (avgLevel < LOW_LEVEL) {
       avgScaleLevel = LOW_BRIGHTNESS;
-      period_smooth = COLOR_WHEEL_PERIOD;
+
+      // возвращаем период цветового круга по дефолту
+      period_smooth = COLOR_WHEEL_PERIOD / 1000;
     }
 
     strip.setBrightness(avgScaleLevel);
 
+    // вычисляем средний уровень ШИМ
     tmp_smooth +=  (avgScaleLevel - tmp_smooth) * 0.005;
 
+    // смотрим превыщение текущего уровня над средним и запоминаем момент если превысили
     if (avgScaleLevel > tmp_smooth ) {
       lastRiseLevel = millis();
     }
-    
+
+    // вычисляем период таких превыщений
     unsigned long period = (millis() -  lastRiseLevel) * 10;
     if (period < 1000) {
       period = 1000;
@@ -341,9 +346,8 @@ void audioMode() {
       period = 7500;
     }
 
+    // сглаживаем период, его будем использовать для цветового круга
     period_smooth +=  (period - period_smooth) * 0.025;
-    Serial.print(period); Serial.print(" ");
-    Serial.println(period_smooth);
 
     if (0) {
       Serial.print(globMax); Serial.print(" ");
